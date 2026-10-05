@@ -11,12 +11,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SpawnEggItem;
 
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,14 +40,11 @@ public final class JeiMobOutputHelper {
             placeholder.setHoverName(mobTooltip);
             addOutputStack(builder, x, y, placeholder, null, false);
         } else {
-            Object eggSlot = addOutputStack(builder, x, y, new ItemStack(egg), mobTooltip, hideSpawnEggTexture);
-            if (hideSpawnEggTexture) {
-                linkMobAndEggOutputs(builder, eggSlot, egg, entityType);
-            }
+            addOutputStack(builder, x, y, new ItemStack(egg), mobTooltip, hideSpawnEggTexture);
         }
     }
 
-    private static SpawnEggItem findSpawnEgg(EntityType<?> entityType) {
+    static SpawnEggItem findSpawnEgg(EntityType<?> entityType) {
         return SPAWN_EGGS.computeIfAbsent(entityType, type -> {
             for (Item item : BuiltInRegistries.ITEM) {
                 if (item instanceof SpawnEggItem egg && egg.getType(null) == type) {
@@ -60,32 +53,6 @@ public final class JeiMobOutputHelper {
             }
             return Optional.ofNullable(SpawnEggItem.byId(type));
         }).orElse(null);
-    }
-
-    public static void addSummoningRituals1201Outputs(Object builder, Object recipe) {
-        try {
-            Object outputs = invoke(recipe, "getOutputs");
-            ClassLoader classLoader = outputs.getClass().getClassLoader();
-            Class<?> consumerType = Class.forName("org.apache.logging.log4j.util.TriConsumer", true, classLoader);
-            Object consumer = Proxy.newProxyInstance(classLoader, new Class<?>[]{consumerType}, (proxy, method, args) -> {
-                if (method.getDeclaringClass() == Object.class) {
-                    return objectMethod(proxy, method.getName(), args);
-                }
-                if (args != null && args.length == 3 && "MOB".equals(String.valueOf(args[0]))) {
-                    Object mobOutput = args[1];
-                    EntityType<?> entityType = (EntityType<?>) invoke(mobOutput, "getOutput");
-                    int count = ((Number) invoke(mobOutput, "getCount")).intValue();
-                    int index = ((Number) args[2]).intValue();
-                    addMobOutput(builder, 2 + index * 17, 130, entityType, count, true);
-                }
-                return null;
-            });
-
-            Method forEach = outputs.getClass().getMethod("forEach", consumerType);
-            forEach.invoke(outputs, consumer);
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Unable to read Summoning Rituals 1.20.1 outputs", exception);
-        }
     }
 
     public static void addGoety1201Output(Object builder, Object recipe) {
@@ -138,86 +105,6 @@ public final class JeiMobOutputHelper {
             return slot;
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("Unable to add JEI mob output slot", exception);
-        }
-    }
-
-    private static void linkMobAndEggOutputs(Object builder, Object eggSlot, SpawnEggItem egg,
-                                             EntityType<?> entityType) {
-        try {
-            List<Object> linkedSlots = new ArrayList<>();
-            for (Object slot : getVisibleSlots(builder)) {
-                if (hasMatchingMobOutput(slot, egg, entityType)) {
-                    linkedSlots.add(slot);
-                }
-            }
-            if (linkedSlots.isEmpty()) {
-                return;
-            }
-            linkedSlots.add(eggSlot);
-
-            ClassLoader classLoader = builder.getClass().getClassLoader();
-            Class<?> acceptorType = Class.forName("mezz.jei.api.gui.builder.IIngredientAcceptor", true, classLoader);
-            Object acceptors = Array.newInstance(acceptorType, linkedSlots.size());
-            for (int i = 0; i < linkedSlots.size(); i++) {
-                Array.set(acceptors, i, linkedSlots.get(i));
-            }
-            Class<?> layoutBuilderType = Class.forName(LAYOUT_BUILDER, true, classLoader);
-            layoutBuilderType.getMethod("createFocusLink", acceptors.getClass()).invoke(builder, (Object) acceptors);
-        } catch (ReflectiveOperationException | RuntimeException ignored) {
-            // The recipe still has a clickable spawn-egg output slot if a JEI implementation changes internals.
-        }
-    }
-
-    private static Collection<?> getVisibleSlots(Object builder) throws ReflectiveOperationException {
-        for (Class<?> current = builder.getClass(); current != null; current = current.getSuperclass()) {
-            for (Field field : current.getDeclaredFields()) {
-                if (field.getName().equals("visibleSlots") && Collection.class.isAssignableFrom(field.getType())) {
-                    field.trySetAccessible();
-                    Object value = field.get(builder);
-                    if (value instanceof Collection<?> slots) {
-                        return slots;
-                    }
-                }
-            }
-        }
-        return List.of();
-    }
-
-    private static boolean hasMatchingMobOutput(Object slot, SpawnEggItem egg, EntityType<?> entityType)
-            throws ReflectiveOperationException {
-        if (!"OUTPUT".equals(String.valueOf(invoke(slot, "getRole")))) {
-            return false;
-        }
-        Object ingredientAcceptor = invoke(slot, "getIngredientAcceptor");
-        Object ingredients = invoke(ingredientAcceptor, "getAllIngredients");
-        if (!(ingredients instanceof Iterable<?> typedIngredients)) {
-            return false;
-        }
-        for (Object typedIngredient : typedIngredients) {
-            Object ingredient = invoke(typedIngredient, "getIngredient");
-            if (ingredient.getClass().getName().startsWith("com.almostreliable.summoningrituals.")) {
-                if (getEntityType(ingredient) == entityType) {
-                    return true;
-                }
-                Object existingEgg = invoke(ingredient, "getEgg");
-                if (existingEgg instanceof SpawnEggItem existingSpawnEgg && existingSpawnEgg == egg) {
-                    return true;
-                }
-                if (existingEgg instanceof ItemStack stack && stack.getItem() == egg) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static EntityType<?> getEntityType(Object mobIngredient) throws ReflectiveOperationException {
-        try {
-            return (EntityType<?>) invoke(mobIngredient, "getEntityType");
-        } catch (NoSuchMethodException ignored) {
-            Object entityInfo = invoke(mobIngredient, "getEntityInfo");
-            Object entityHolder = invoke(entityInfo, "entity");
-            return (EntityType<?>) invoke(entityHolder, "value");
         }
     }
 
