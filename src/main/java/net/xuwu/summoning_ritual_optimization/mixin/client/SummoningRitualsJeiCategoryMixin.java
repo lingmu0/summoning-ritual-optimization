@@ -1,18 +1,22 @@
 package net.xuwu.summoning_ritual_optimization.mixin.client;
 
-import net.xuwu.summoning_ritual_optimization.compat.jei.JeiMobOutputHelper;
-import org.spongepowered.asm.mixin.injection.Coerce;
+import mezz.jei.api.gui.builder.IIngredientAcceptor;
+import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
+import mezz.jei.api.ingredients.IIngredientType;
+import net.xuwu.summoning_ritual_optimization.compat.jei.SummoningRitualsMobOutput;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Pseudo
 @Mixin(targets = "com.almostreliable.summoningrituals.compat.viewer.jei.AltarJeiCategory", remap = false)
 public abstract class SummoningRitualsJeiCategoryMixin {
-    @Inject(method = "setRecipe", at = @At("TAIL"), remap = false)
-    private void summoningRitualOptimization$showMobEggs(@Coerce Object builder, @Coerce Object recipeHolder, @Coerce Object focuses, CallbackInfo ci) {
-        JeiMobOutputHelper.addSummoningRituals1211Outputs(builder, recipeHolder);
+    @Redirect(method = "lambda$setRecipe$2", at = @At(value = "INVOKE",
+            target = "Lmezz/jei/api/gui/builder/IRecipeSlotBuilder;addIngredient(Lmezz/jei/api/ingredients/IIngredientType;Ljava/lang/Object;)Lmezz/jei/api/gui/builder/IIngredientAcceptor;"),
+            remap = false, require = 1)
+    private static IIngredientAcceptor<?> summoningRitualOptimization$useSpawnEgg(
+            IRecipeSlotBuilder slot, IIngredientType<?> type, Object ingredient) {
+        return SummoningRitualsMobOutput.add(slot, ingredient, null);
     }
 }

@@ -11,4 +11,9 @@ JEI, Summoning Rituals, and Goety are optional dependencies. This mod only chang
 the JEI recipe display. Mob outputs use their spawn egg when available, otherwise a
 structure void; the slot tooltip shows the mob name and output count.
 
+Summoning Rituals displays the original mob model instead of the egg texture. The
+visible output slot contains the corresponding spawn egg, so left-click/R shows
+its recipe sources and right-click/U shows its usages in JEI. Goety keeps the egg
+texture visible. Mobs without a registered spawn egg display a structure void.
+
 Build with `gradlew build` on the matching branch.
