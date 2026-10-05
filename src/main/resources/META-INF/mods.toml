@@ -40,6 +40,10 @@ authors = "${mod_authors}" #optional
 
 # The description text for the mod (multi line!) (#mandatory)
 description = '''${mod_description}'''
+
+[[mixins]]
+config = "${mod_id}.mixins.json"
+
 # A dependency - use the . to indicate dependency for a specific modid. Dependencies are optional.
 [[dependencies."${mod_id}"]] #optional
 # the modid of the dependency
@@ -61,3 +65,24 @@ mandatory = true
 versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
+# The recipe viewer integrations are optional and only affect the client.
+[[dependencies."${mod_id}"]]
+modId = "jei"
+mandatory = false
+versionRange = "[15,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies."${mod_id}"]]
+modId = "summoningrituals"
+mandatory = false
+versionRange = "[1,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies."${mod_id}"]]
+modId = "goety"
+mandatory = false
+versionRange = "[1,)"
+ordering = "AFTER"
+side = "CLIENT"
