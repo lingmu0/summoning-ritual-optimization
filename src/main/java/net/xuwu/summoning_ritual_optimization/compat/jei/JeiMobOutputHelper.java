@@ -1,6 +1,8 @@
 package net.xuwu.summoning_ritual_optimization.compat.jei;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
@@ -28,16 +30,17 @@ public final class JeiMobOutputHelper {
     private JeiMobOutputHelper() {
     }
 
-    public static void addMobOutput(Object builder, int x, int y, EntityType<?> entityType, int count) {
+    public static void addMobOutput(Object builder, int x, int y, EntityType<?> entityType, int count,
+                                    boolean hideSpawnEggTexture) {
         Component mobTooltip = Component.translatable(entityType.getDescriptionId())
                 .append(Component.literal(" \u00D7 " + count));
         SpawnEggItem egg = findSpawnEgg(entityType);
         if (egg == null) {
             ItemStack placeholder = Items.STRUCTURE_VOID.getDefaultInstance();
             placeholder.setHoverName(mobTooltip);
-            addOutputStack(builder, x, y, placeholder, null);
+            addOutputStack(builder, x, y, placeholder, null, false);
         } else {
-            addOutputStack(builder, x, y, new ItemStack(egg), mobTooltip);
+            addOutputStack(builder, x, y, new ItemStack(egg), mobTooltip, hideSpawnEggTexture);
         }
     }
 
@@ -66,7 +69,7 @@ public final class JeiMobOutputHelper {
                     EntityType<?> entityType = (EntityType<?>) invoke(mobOutput, "getOutput");
                     int count = ((Number) invoke(mobOutput, "getCount")).intValue();
                     int index = ((Number) args[2]).intValue();
-                    addMobOutput(builder, 2 + index * 17, 130, entityType, count);
+                    addMobOutput(builder, 2 + index * 17, 130, entityType, count, true);
                 }
                 return null;
             });
@@ -88,7 +91,7 @@ public final class JeiMobOutputHelper {
             }
 
             if (entityType != null) {
-                addMobOutput(builder, 149, 57, entityType, 1);
+                addMobOutput(builder, 149, 57, entityType, 1, false);
             }
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("Unable to read Goety 1.20.1 ritual output", exception);
@@ -103,7 +106,8 @@ public final class JeiMobOutputHelper {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void addOutputStack(Object builder, int x, int y, ItemStack stack, Component hiddenEggTooltip) {
+    private static void addOutputStack(Object builder, int x, int y, ItemStack stack, Component mobTooltip,
+                                       boolean hideSpawnEggTexture) {
         try {
             ClassLoader classLoader = builder.getClass().getClassLoader();
             Class<?> roleType = Class.forName(INGREDIENT_ROLE, true, classLoader);
@@ -112,11 +116,12 @@ public final class JeiMobOutputHelper {
             Object slot = layoutBuilderType.getMethod("addSlot", roleType, int.class, int.class)
                     .invoke(builder, outputRole, x, y);
             Class<?> slotBuilderType = Class.forName(SLOT_BUILDER, true, classLoader);
-            if (hiddenEggTooltip != null) {
+            if (mobTooltip != null) {
                 Class<?> ingredientRendererType = Class.forName(INGREDIENT_RENDERER, true, classLoader);
                 Class<?> vanillaTypes = Class.forName(VANILLA_TYPES, true, classLoader);
                 Object itemStackIngredientType = vanillaTypes.getField("ITEM_STACK").get(null);
-                Object renderer = createHiddenEggRenderer(classLoader, ingredientRendererType, hiddenEggTooltip);
+                Object renderer = createMobEggRenderer(classLoader, ingredientRendererType, mobTooltip,
+                        hideSpawnEggTexture);
                 slotBuilderType.getMethod("setCustomRenderer",
                                 Class.forName("mezz.jei.api.ingredients.IIngredientType", true, classLoader),
                                 ingredientRendererType)
@@ -128,15 +133,27 @@ public final class JeiMobOutputHelper {
         }
     }
 
-    private static Object createHiddenEggRenderer(ClassLoader classLoader, Class<?> rendererType, Component tooltip) {
+    private static Object createMobEggRenderer(ClassLoader classLoader, Class<?> rendererType, Component tooltip,
+                                               boolean hideTexture) {
         InvocationHandler handler = (proxy, method, args) -> {
             return switch (method.getName()) {
-                case "render" -> null;
+                case "render" -> {
+                    if (method.isDefault()) {
+                        yield InvocationHandler.invokeDefault(proxy, method, args);
+                    }
+                    if (!hideTexture) {
+                        GuiGraphics graphics = (GuiGraphics) args[0];
+                        ItemStack stack = (ItemStack) args[1];
+                        graphics.renderItem(stack, 0, 0);
+                        graphics.renderItemDecorations(Minecraft.getInstance().font, stack, 0, 0);
+                    }
+                    yield null;
+                }
                 case "getTooltip" -> method.getReturnType() == List.class
                         ? List.of(tooltip)
                         : InvocationHandler.invokeDefault(proxy, method, args);
                 case "getWidth", "getHeight" -> 16;
-                case "toString" -> "HiddenSpawnEggRenderer[" + tooltip.getString() + "]";
+                case "toString" -> "MobSpawnEggRenderer[" + tooltip.getString() + "]";
                 case "hashCode" -> System.identityHashCode(proxy);
                 case "equals" -> proxy == args[0];
                 default -> method.isDefault() ? InvocationHandler.invokeDefault(proxy, method, args) : null;
