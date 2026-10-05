@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "net.xuwu.summoning_ritual_optimization.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "client": [
+    "client.SummoningRitualsJeiCategoryMixin",
+    "client.GoetyRitualJeiCategoryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
